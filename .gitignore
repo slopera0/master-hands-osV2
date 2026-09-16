@@ -1,0 +1,13 @@
+node_modules/
+.env
+data/*.json
+data/*.json.tmp
+data/*.corrupt-*.bak
+data/uploads/*
+!data/uploads/.gitkeep
+data/logs/*
+!data/logs/.gitkeep
+data/backups/*
+!data/backups/.gitkeep
+.DS_Store
+*.log

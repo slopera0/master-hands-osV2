@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Master Hands — Acoustic Project OS</title>
+<meta name="description" content="Estación de trabajo para proyectos de insonorización: cotizador, render 3D y gestión de obra.">
+<link rel="stylesheet" href="css/styles.css">
+<!-- Librerías de exportación (UMD, sin necesidad de bundler) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<!-- Three.js moderno vía import map (ESM), sin bundler -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="authScreen" style="display:none;"></div>
+
+<div class="app-shell" id="appShell" style="display:none;">
+  <div class="mobile-topbar no-print">
+    <button class="hamburger-btn" id="btnHamburger" aria-label="Abrir menú">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="brand-mark">MH</div>
+    <h2 id="mobileViewHeading">Proyectos</h2>
+  </div>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">MH</div>
+      <div>
+        <h1>MASTER HANDS</h1>
+        <p>ACOUSTIC PROJECT OS · V2</p>
+      </div>
+    </div>
+
+    <div class="sync-indicator no-print">
+      <span class="dot dot-ok" id="syncDot"></span>
+      <span id="syncLabel">Conectado</span>
+    </div>
+
+    <div class="project-chip" id="projectChip">
+      <div class="label">Proyecto activo</div>
+      <div class="name" id="activeProjectName">Ninguno seleccionado</div>
+      <button class="btn btn-sm" id="btnSwitchProject">Cambiar / Nuevo proyecto</button>
+    </div>
+
+    <nav class="nav" id="navigation"></nav>
+
+    <div class="user-badge no-print" id="userBadge">
+      <div>
+        <div class="user-badge-name" id="userBadgeName">—</div>
+        <div class="user-badge-role" id="userBadgeRole">—</div>
+      </div>
+      <button class="btn btn-sm btn-ghost" id="btnLogout">Salir</button>
+    </div>
+
+    <div class="sidebar-foot">
+      Regla de oro: insonorizar ≠ acondicionar.<br>
+      Offline-friendly · Base de datos local.<br>
+      Medellín, Colombia
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h2 id="viewHeading">Proyectos</h2>
+        <p id="viewSubtitle">Selecciona o crea un proyecto para comenzar.</p>
+      </div>
+      <div class="topbar-actions no-print" id="topbarActions">
+        <button class="btn" id="btnGeminiOpen" title="Asistente de diagnóstico técnico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Copiloto
+        </button>
+        <button class="btn" id="btnSaveNow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+          Guardar
+        </button>
+        <button class="btn" id="btnPrint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 6 2 18 2 18 9"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimir
+        </button>
+      </div>
+    </div>
+
+    <div class="wave-divider no-print" id="waveDivider"></div>
+
+    <!-- PROJECT LIST (home) -->
+    <section class="view-panel active" id="view-projects">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Proyectos guardados
+          </div>
+          <button class="btn btn-primary btn-sm" id="btnNewProject">+ Nuevo proyecto</button>
+        </div>
+        <div class="row-2" style="margin-bottom:14px;">
+          <label>Buscar por nombre, cliente o código<input id="projectSearchInput" placeholder="Ej. Gómez, MH-2026, Llanogrande…" autocomplete="off"></label>
+          <label>Filtrar por estado
+            <select id="projectStatusFilter">
+              <option value="">Todos los estados</option>
+              <option value="prospecto">Prospecto</option>
+              <option value="cotizado">Cotizado</option>
+              <option value="aprobado">Aprobado</option>
+              <option value="en_obra">En obra</option>
+              <option value="entregado">Entregado</option>
+            </select>
+          </label>
+        </div>
+        <div id="projectListContainer"><div class="empty-state">Cargando proyectos…</div></div>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section class="view-panel" id="view-dashboard">
+      <div class="grid grid-4">
+        <div class="card kpi"><div class="kpi-label">Proyecto</div><div class="kpi-val" id="kpiProjectName">—</div></div>
+        <div class="card kpi"><div class="kpi-label">Superficie</div><div class="kpi-val" id="kpiTotalArea">0.0 <small>m²</small></div></div>
+        <div class="card kpi"><div class="kpi-label">Volumen acústico</div><div class="kpi-val" id="kpiTotalVol">0.0 <small>m³</small></div></div>
+        <div class="card kpi"><div class="kpi-label">Precio de venta</div><div class="kpi-val accent" id="kpiSalePrice">$0</div></div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:16px;">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Estado del proyecto</div></div>
+          <div class="status-pipeline" id="statusPipeline"></div>
+          <div style="margin-top:16px; display:grid; gap:10px; font-size:13px;">
+            <div style="display:flex; gap:11px;"><span class="badge badge-ok">1</span><div>Intake & precalificación del cliente.</div></div>
+            <div style="display:flex; gap:11px;"><span class="badge badge-ok">2</span><div>Visita técnica de 60 minutos y levantamiento.</div></div>
+            <div style="display:flex; gap:11px;"><span class="badge badge-ok">3</span><div>Modelado, cantidades (BOM) y física acústica.</div></div>
+            <div style="display:flex; gap:11px;"><span class="badge badge-ok">4</span><div>Simulación 3D y render de la sala.</div></div>
+            <div style="display:flex; gap:11px;"><span class="badge badge-ok">5</span><div>Propuesta, contrato y firma electrónica.</div></div>
+            <div style="display:flex; gap:11px;"><span class="badge badge-ok">6</span><div>Obra, hold points y entrega As-Built.</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Alertas de calidad y flancos</div></div>
+          <div id="dashboardAlerts" style="display:grid; gap:9px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROJECT MASTER -->
+    <section class="view-panel" id="view-project">
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Ficha maestra del proyecto</div></div>
+          <div class="field-group">
+            <label>Cliente / Titular
+              <input data-bind="client.name" placeholder="Ej. Familia Gómez Londoño" autocomplete="off">
+            </label>
+            <div class="row-2">
+              <label>Nombre del proyecto
+                <input data-bind="name" placeholder="Ej. Cinema Dedicado Llanogrande" autocomplete="off">
+              </label>
+              <label>Código interno
+                <input data-bind="code" placeholder="MH-2026-001" autocomplete="off">
+              </label>
+            </div>
+            <div class="row-2">
+              <label>Ciudad / Zona
+                <input data-bind="city" autocomplete="off">
+              </label>
+              <label>Tipología
+                <select data-bind="projectType">
+                  <option>Home Theater Dedicado (Dolby Atmos)</option>
+                  <option>Estudio de Grabación / Control Room</option>
+                  <option>Vocal Booth / Sala de Canto</option>
+                  <option>Sala de Ensayo / Música</option>
+                  <option>Oficina Premium / Sala de Juntas</option>
+                  <option>Habitación Residencial / Aislamiento</option>
+                </select>
+              </label>
+            </div>
+            <label>Objetivo técnico principal
+              <textarea data-bind="objective" placeholder="Aislamiento de subwoofers (20-80 Hz) hacia dormitorio superior y RT60 de 0.28s interior."></textarea>
+            </label>
+            <div class="row-3">
+              <label>Teléfono
+                <input data-bind="client.phone" placeholder="+57 300..." autocomplete="off">
+              </label>
+              <label>Email
+                <input data-bind="client.email" placeholder="cliente@correo.com" autocomplete="off">
+                <span class="field-error" data-error-for="client.email"></span>
+              </label>
+              <label>Fecha de visita
+                <input type="date" data-bind="visitDate">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div class="card-title">Insumos y archivos recibidos</div></div>
+          <div style="display:grid; gap:8px;">
+            <label class="check-item"><input type="checkbox" data-bind="docs.plans"><span>Planos arquitectónicos (PDF / DWG)</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="docs.sections"><span>Cortes estructurales y alturas</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="docs.mep"><span>Planos MEP / HVAC / eléctrico</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="docs.photos"><span>Protocolo fotográfico 360° (12+ fotos)</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="docs.hoa"><span>Reglamento de propiedad horizontal / horarios</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="docs.auth"><span>Autorización tratamiento de datos (Ley 1581)</span></label>
+          </div>
+          <div style="margin-top:15px;">
+            <label>Ruta digital estandarizada
+              <input id="stdFolderPath" readonly autocomplete="off">
+            </label>
+            <button class="btn" style="margin-top:8px; width:100%;" id="btnCopyTree">Copiar árbol de carpetas (01_Cliente a 11_Comms)</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SITE INSPECTION -->
+    <section class="view-panel" id="view-site">
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Levantamiento físico del recinto</div></div>
+          <div class="row-3">
+            <label>Largo (L) [m]<input id="dimL" class="numeric" type="number" step="0.01" min="0.1" max="99" autocomplete="off"></label>
+            <label>Ancho (W) [m]<input id="dimW" class="numeric" type="number" step="0.01" min="0.1" max="99" autocomplete="off"></label>
+            <label>Alto (H) [m]<input id="dimH" class="numeric" type="number" step="0.01" min="0.1" max="20" autocomplete="off"></label>
+          </div>
+          <span class="field-error" id="dimError"></span>
+          <div class="grid grid-3" style="margin-top:12px;">
+            <div class="card" style="padding:12px; background:var(--graphite-950);"><div class="kpi-label">Piso / Techo</div><b class="numeric" id="calcFloorArea" style="font-size:17px;">—</b> m²</div>
+            <div class="card" style="padding:12px; background:var(--graphite-950);"><div class="kpi-label">Muros brutos</div><b class="numeric" id="calcGrossWalls" style="font-size:17px;">—</b> m²</div>
+            <div class="card" style="padding:12px; background:var(--graphite-950);"><div class="kpi-label">Volumen</div><b class="numeric" id="calcRoomVol" style="font-size:17px;">—</b> m³</div>
+          </div>
+          <div class="row-3" style="margin-top:12px;">
+            <label>Área puertas [m²]<input id="areaDoors" class="numeric" type="number" step="0.01" min="0" autocomplete="off"></label>
+            <label>Área ventanas [m²]<input id="areaWindows" class="numeric" type="number" step="0.01" min="0" autocomplete="off"></label>
+            <label>Otros vacíos [m²]<input id="areaOther" class="numeric" type="number" step="0.01" min="0" autocomplete="off"></label>
+          </div>
+          <div class="callout" style="margin-top:12px;">
+            <b>Área neta de cerramiento:</b> <span class="numeric" id="calcNetWalls">—</span> m².<br>
+            <span style="color:var(--text-mid);">Base para el cálculo de doble placa, perfiles y lana mineral.</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div class="card-title">Checklist de visita en 60 minutos</div></div>
+          <div style="display:grid; gap:8px;">
+            <label class="check-item"><input type="checkbox" data-bind="site.walls"><span>Estructura de muros verificada (mampostería / drywall)</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="site.ceiling"><span>Losa superior y altura disponible confirmadas</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="site.floor"><span>Capacidad de losa para piso flotante verificada</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="site.doors"><span>Puerta actual evaluada (requiere drop seal y masa)</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="site.windows"><span>Ventanería evaluada (laminado asimétrico)</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="site.hvac"><span>Ruta de ductos HVAC y retorno revisados</span></label>
+            <label class="check-item"><input type="checkbox" data-bind="site.flanking"><span>Rutas de flanco (cajas eléctricas, tuberías) identificadas</span></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3D VISUALIZER -->
+    <section class="view-panel" id="view-3d">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            Simulador acústico 3D
+          </div>
+          <div class="overlay-top" style="position:static;">
+            <button class="btn btn-sm" id="btnTogglePressure">Ver modos de presión</button>
+            <button class="btn btn-sm" id="btnToggle3DTheme">☀️ Tema claro</button>
+            <button class="btn btn-sm" id="btnRender3D">Capturar render PNG</button>
+            <button class="btn btn-sm btn-ghost" id="btnReset3D">Restablecer vista</button>
+          </div>
+        </div>
+        <div class="canvas-3d-wrap">
+          <canvas id="canvas3D"></canvas>
+          <div class="canvas-loading" id="canvas3DLoading"><div class="spinner"></div>Cargando motor 3D…</div>
+          <div class="overlay-bottom">Mouse o touch para rotar / zoom</div>
+        </div>
+        <div class="grid grid-3" style="margin-top:12px;">
+          <div class="callout"><b>Pantalla y front wall:</b> bafle ciego con lana mineral 120mm detrás de pantalla acústicamente transparente.</div>
+          <div class="callout"><b>Paredes laterales y techo:</b> paneles de absorción de primera reflexión y nubes acústicas suspendidas.</div>
+          <div class="callout"><b>Pared trasera y subwoofers:</b> difusión QRD Skyline 2D y 2 subwoofers en esquinas opuestas.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CALCULATOR -->
+    <section class="view-panel" id="view-calculator">
+      <div class="card">
+        <div class="card-head"><div class="card-title">Física acústica y modos de sala</div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Magnitud</th><th>Fórmula</th><th>Resultado</th><th>Interpretación</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><b>Frecuencia → Longitud de onda</b></td>
+                <td class="numeric">λ = c / f (c=343 m/s)</td>
+                <td><div style="display:flex; align-items:center; gap:8px;"><input id="calcFreqInput" type="number" value="60" min="1" max="20000" class="numeric" style="width:76px; min-height:32px; padding:4px 8px;" autocomplete="off"> Hz →&nbsp;<b class="numeric" id="calcLambdaResult" style="color:var(--copper-hi);">—</b></div></td>
+                <td>A 20 Hz (λ≈17.15m), solo el desacoplamiento detiene el bajo.</td>
+              </tr>
+              <tr><td><b>Modo axial (Largo)</b></td><td class="numeric">f = c / (2·L)</td><td><b class="numeric" id="calcModeL" style="color:var(--copper-hi);">—</b></td><td>Resonancia a lo largo de la sala.</td></tr>
+              <tr><td><b>Modo axial (Ancho)</b></td><td class="numeric">f = c / (2·W)</td><td><b class="numeric" id="calcModeW" style="color:var(--copper-hi);">—</b></td><td>Resonancia lateral entre paredes paralelas.</td></tr>
+              <tr><td><b>Modo axial (Alto)</b></td><td class="numeric">f = c / (2·H)</td><td><b class="numeric" id="calcModeH" style="color:var(--copper-hi);">—</b></td><td>Resonancia vertical piso-techo.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:18px;">
+          <div class="card-title" style="font-size:14px; margin-bottom:10px;">Estimación de reverberación (Sabine RT60)</div>
+          <div class="row-3">
+            <label>Absorción total estimada (sabines)<input id="calcSabinesInput" class="numeric" type="number" step="0.5" min="0.1" value="38.0" autocomplete="off"></label>
+            <label>Volumen de sala [m³]<input id="calcSabineVol" class="numeric" readonly autocomplete="off"></label>
+            <label>RT60 estimado [s]<input id="calcRT60Result" class="numeric" readonly style="color:var(--success); font-weight:700; font-size:15px;" autocomplete="off"></label>
+          </div>
+          <p class="kpi-label" style="margin-top:8px;">Objetivo home theater high-end: 0.25–0.35s plano de 125Hz a 4kHz (ISO 3382-2).</p>
+          <div class="callout" style="margin-top:10px;">
+            <b>Nota técnica:</b> la fórmula de Sabine es una aproximación válida para salas con absorción moderada y distribuida uniformemente. En recintos muy pequeños o muy absorbentes (como suele ser un home theater terminado), considera contrastar con Eyring/Norris o con una medición REW in situ antes de comprometer una garantía de RT60 con el cliente.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOM ESTIMATOR -->
+    <section class="view-panel" id="view-estimator">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Matriz paramétrica de cantidades y costos (BOM)</div>
+          <div style="display:flex; gap:7px;">
+            <button class="btn btn-sm" id="btnOpenCatalog">📋 Catálogo de materiales</button>
+            <button class="btn btn-primary btn-sm" id="btnAddBom">+ Ítem en blanco</button>
+          </div>
+        </div>
+        <div class="row-3" style="margin-bottom:14px;">
+          <label>% Desperdicio materiales<input id="paramWaste" class="numeric" type="number" min="0" max="100" step="0.5" autocomplete="off"></label>
+          <label>% Indirectos / administración<input id="paramIndirect" class="numeric" type="number" min="0" max="100" step="0.5" autocomplete="off"></label>
+          <label>% Margen comercial objetivo<input id="paramMargin" class="numeric" type="number" min="0" max="95" step="0.5" autocomplete="off"></label>
+        </div>
+        <div class="table-wrap">
+          <table id="bomTable">
+            <thead><tr><th>Subsistema / material</th><th>Cant.</th><th>Und.</th><th>Costo unit. (COP)</th><th>Desp.</th><th>Subtotal (COP)</th><th></th></tr></thead>
+            <tbody id="bomTableBody"></tbody>
+            <tfoot>
+              <tr style="background:var(--graphite-950); font-weight:700;"><td colspan="5">Costo directo de materiales y mano de obra:</td><td class="numeric" id="bomDirectCost">$0</td><td></td></tr>
+              <tr style="background:var(--graphite-950);"><td colspan="5">Costos indirectos y logística:</td><td class="numeric" id="bomIndirectCost">$0</td><td></td></tr>
+              <tr style="background:var(--graphite-800); font-size:14px; font-weight:800;"><td colspan="5">PRECIO TOTAL DE VENTA SUGERIDO (COP):</td><td class="numeric" id="bomFinalSalePrice" style="color:var(--copper-hi);">$0</td><td></td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILE LOCKER -->
+    <section class="view-panel" id="view-files">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Bóveda de archivos del proyecto</div>
+          <label class="btn btn-primary" style="cursor:pointer;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Subir archivo / foto
+            <input type="file" id="fileInput" multiple accept="image/*,.pdf,.doc,.docx" style="display:none">
+          </label>
+        </div>
+        <p class="kpi-label">Los archivos se guardan en disco en el servidor local (data/uploads) y quedan asociados a este proyecto en la base de datos. Máximo 25MB por archivo.</p>
+        <div class="file-grid" id="fileGrid"></div>
+      </div>
+    </section>
+
+    <!-- PROPOSAL & CONTRACT -->
+    <section class="view-panel" id="view-proposal">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Propuesta y contrato</div>
+          <div style="display:flex; gap:7px; flex-wrap:wrap;">
+            <button class="btn btn-sm" id="btnExportPdf">Exportar a PDF</button>
+            <button class="btn btn-sm" id="btnEmailDoc">Enviar por email</button>
+          </div>
+        </div>
+        <div class="doc-shell">
+          <div class="doc-toolbar no-print">
+            <button class="btn btn-sm" data-cmd="bold"><b>B</b></button>
+            <button class="btn btn-sm" data-cmd="italic"><i>I</i></button>
+            <button class="btn btn-sm" data-cmd="insertUnorderedList">• Lista</button>
+            <button class="btn btn-sm" data-cmd="insertOrderedList">1. Lista</button>
+            <button class="btn btn-sm" id="btnTemplateSignature">Plantilla Signature Búnker</button>
+            <button class="btn btn-sm" id="btnTemplateContract">Contrato & Garantía</button>
+          </div>
+          <div id="documentPaper" class="doc-paper" contenteditable="true"></div>
+        </div>
+
+        <div class="signature-block no-print">
+          <div>
+            <label style="margin-bottom:6px;">Firma electrónica del cliente (contrato)</label>
+            <div class="row-2" style="margin-bottom:8px;">
+              <label>Nombre completo del firmante<input id="signerName" placeholder="Ej. María Gómez Londoño" autocomplete="off"></label>
+              <label>Cédula / ID<input id="signerId" placeholder="Ej. 43.xxx.xxx" autocomplete="off"></label>
+            </div>
+            <div class="signature-pad-wrap"><canvas id="signaturePad" width="320" height="140"></canvas></div>
+            <div style="display:flex; gap:6px; margin-top:6px;">
+              <button class="btn btn-sm" id="btnClearSignature">Borrar</button>
+              <button class="btn btn-sm btn-primary" id="btnSaveSignature">Guardar firma</button>
+            </div>
+          </div>
+          <div class="signature-status" id="signatureStatus">Sin firmar.</div>
+        </div>
+        <div class="callout" style="margin-top:14px;">
+          <b>Aviso legal:</b> esta firma queda registrada con nombre, cédula, dirección IP, fecha/hora del servidor y un hash del documento firmado (para detectar si el texto cambió después de firmarlo). Es una evidencia electrónica razonable de consentimiento, pero <b>no es una firma digital certificada</b> bajo la Ley 527 de 1999 (esa certificación requiere un proveedor autorizado como DocuSign o SignWell). Si tu operación necesita esa validez plena, considera integrar uno de esos proveedores.
+        </div>
+      </div>
+    </section>
+
+    <!-- PROVIDERS -->
+    <section class="view-panel" id="view-providers">
+      <div class="card">
+        <div class="card-head"><div class="card-title">Directorio de proveedores homologados (Medellín)</div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Proveedor</th><th>Especialidad</th><th>Ubicación</th><th>Teléfono</th><th>Estado</th></tr></thead>
+            <tbody>
+              <tr><td><b>Su Drywall S.A.</b></td><td>Lana Black Theater, membranas acústicas, perfiles</td><td>Calle 30 #55-49, Medellín</td><td>324 510 7499</td><td><span class="badge badge-ok">P1 · Auditado</span></td></tr>
+              <tr><td><b>SIS S.A.</b></td><td>Lana mineral de roca basáltica, silenciadores</td><td>Cl. 77A #45A-248, Itagüí</td><td>314 789 1636</td><td><span class="badge badge-ok">P1 · Auditado</span></td></tr>
+              <tr><td><b>Ecoacustika</b></td><td>Ingeniería acústica, puertas fonoaislantes</td><td>Calle 79A #69-36, Medellín</td><td>313 576 2226</td><td><span class="badge badge-ok">P1 · Auditado</span></td></tr>
+              <tr><td><b>Rapividrios S.A.S.</b></td><td>Ventanería termoacústica oscilobatiente</td><td>Calle 24 #60-29, Medellín</td><td>(604) 448 0010</td><td><span class="badge badge-ok">P1 · Auditado</span></td></tr>
+              <tr><td><b>Acústica Edemfold</b></td><td>Puertas acústicas certificadas STC 45-50 dB</td><td>Planta Bogotá / Atención Medellín</td><td>313 795 9970</td><td><span class="badge badge-ok">P1 · Auditado</span></td></tr>
+              <tr><td><b>UNITEC USA Design</b></td><td>Paneles acústicos en madera microperforada</td><td>C.C. IDEO, Itagüí</td><td>314 233 2147</td><td><span class="badge badge-ok">P1 · Auditado</span></td></tr>
+              <tr><td><b>Veil Acústica</b></td><td>Diseño acústico arquitectónico y control de ruido</td><td>Medellín</td><td>300 227 7522</td><td><span class="badge badge-ok">P1 · Auditado</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSIGHTS / LEARNING PANEL -->
+    <section class="view-panel" id="view-insights">
+      <div class="card">
+        <div class="card-head"><div class="card-title">Aprendizaje del negocio</div></div>
+        <div class="callout" style="margin-bottom:16px;">
+          Esto no es un modelo de inteligencia artificial: es un panel que agrega los datos reales de tus cotizaciones guardadas para revelar patrones (margen promedio, precio por m³, tipologías más frecuentes). Entre más proyectos cotices, más útil se vuelve.
+        </div>
+        <div id="insightsContainer"><div class="empty-state">Cargando…</div></div>
+      </div>
+    </section>
+
+    <!-- SYSTEM STATUS -->
+    <section class="view-panel" id="view-system">
+      <div class="grid grid-4" id="systemKpis"></div>
+      <div class="card" style="margin-top:16px;">
+        <div class="card-head"><div class="card-title">Registro de errores del sistema (auditable)</div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nivel</th><th>Mensaje</th><th>Fecha</th></tr></thead>
+            <tbody id="systemLogsBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <div class="card-head">
+          <div class="card-title">Respaldos automáticos de la base de datos</div>
+          <button class="btn btn-primary btn-sm" id="btnTriggerBackup">Respaldar ahora</button>
+        </div>
+        <p class="kpi-label" style="margin-bottom:10px;">Se genera uno automáticamente al arrancar el servidor y luego cada pocas horas (configurable con BACKUP_INTERVAL_HOURS en .env). Se conservan los últimos 30.</p>
+        <div id="backupsContainer"></div>
+      </div>
+    </section>
+    <!-- TONE / SWEEP GENERATOR -->
+    <section class="view-panel" id="view-tones">
+      <div class="callout callout-warn" style="margin-bottom:16px;">
+        <b>Cuidado con el volumen:</b> empieza siempre bajo, sobre todo con barridos en subgraves — un volumen alto puede dañar altavoces o el oído. Usa esto como ayuda de campo, no como sustituto de un analizador calibrado (REW + micrófono de medición) para mediciones formales.
+      </div>
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Tono puro</div></div>
+          <label>Frecuencia (Hz)<input id="toneFreq" type="number" class="numeric" value="60" min="1" max="20000" autocomplete="off"></label>
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <button class="btn btn-primary" id="btnPlayTone" style="flex:1;">▶ Reproducir</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Barrido de frecuencia</div></div>
+          <div class="row-2"><label>Desde (Hz)<input id="sweepFrom" type="number" class="numeric" value="20" min="1" max="20000" autocomplete="off"></label>
+          <label>Hasta (Hz)<input id="sweepTo" type="number" class="numeric" value="200" min="1" max="20000" autocomplete="off"></label></div>
+          <label style="margin-top:10px;">Duración (segundos)<input id="sweepDuration" type="number" class="numeric" value="8" min="1" max="60" autocomplete="off"></label>
+          <button class="btn btn-primary" id="btnPlaySweep" style="width:100%; margin-top:10px;">▶ Iniciar barrido</button>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Ruido rosa</div></div>
+          <p class="kpi-label">Útil para evaluar aislamiento de banda ancha de oído a oído entre dos espacios.</p>
+          <button class="btn btn-primary" id="btnPlayNoise" style="width:100%; margin-top:10px;">▶ Reproducir ruido rosa</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <div class="row-2" style="align-items:center;">
+          <label>Volumen<input id="toneVolume" type="range" min="0" max="0.4" step="0.01" value="0.15"></label>
+          <button class="btn btn-danger" id="btnStopAllAudio">■ Detener todo</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- USERS (admin only) -->
+    <section class="view-panel" id="view-users">
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Usuarios del sistema</div></div>
+          <div id="usersListContainer"><div class="empty-state">Cargando…</div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Crear nuevo usuario</div></div>
+          <div class="field-group">
+            <label>Nombre completo<input id="newUserName" placeholder="Ej. Laura Restrepo" autocomplete="off"></label>
+            <label>Usuario<input id="newUserUsername" placeholder="laura" autocomplete="off"></label>
+            <label>Contraseña<input id="newUserPassword" type="password" placeholder="Mínimo 6 caracteres" autocomplete="off"></label>
+            <label>Rol
+              <select id="newUserRole">
+                <option value="vendedor">Comercial / Ventas (proyectos, propuestas, email)</option>
+                <option value="tecnico">Técnico de campo (visita, BOM, archivos, 3D)</option>
+                <option value="admin">Administrador (acceso total + usuarios + sistema)</option>
+              </select>
+            </label>
+            <button class="btn btn-primary" id="btnCreateUser">Crear usuario</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MY ACCOUNT -->
+    <section class="view-panel" id="view-account">
+      <div id="accountContainer"></div>
+    </section>
+  </main>
+</div>
+
+<!-- GEMINI MODAL -->
+<div class="modal-backdrop" id="geminiModal">
+  <div class="modal-card">
+    <div class="card-head">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Copiloto de diagnóstico
+      </div>
+      <button class="btn btn-danger btn-sm" id="btnCloseGemini">✕</button>
+    </div>
+    <p class="kpi-label" style="margin-bottom:12px;">La clave de Gemini vive solo en el servidor (.env); este modal nunca la ve ni la guarda en el navegador.</p>
+    <div class="field-group">
+      <label>Instrucción o consulta acústica
+        <textarea id="geminiPrompt" placeholder="Ej. Analiza las dimensiones actuales y redacta una justificación técnica para el cliente sobre por qué se requiere piso flotante con Sylomer."></textarea>
+      </label>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btnRunGemini">Generar asistencia</button>
+        <button class="btn btn-sm" id="btnPreset1">Justificación subwoofer</button>
+        <button class="btn btn-sm" id="btnPreset2">Cláusula garantía</button>
+      </div>
+      <label>Respuesta
+        <textarea id="geminiResponse" readonly style="min-height:130px; background:var(--graphite-950); color:var(--copper-hi);"></textarea>
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL MODAL -->
+<div class="modal-backdrop" id="emailModal">
+  <div class="modal-card">
+    <div class="card-head">
+      <div class="card-title">Enviar propuesta por email</div>
+      <button class="btn btn-danger btn-sm" id="btnCloseEmail">✕</button>
+    </div>
+    <div class="field-group">
+      <label>Para<input id="emailTo" type="email" placeholder="cliente@correo.com" autocomplete="off"></label>
+      <label>Asunto<input id="emailSubject" value="Propuesta técnica y comercial — Master Hands" autocomplete="off"></label>
+      <label>Mensaje<textarea id="emailMessage">Adjuntamos la propuesta de su proyecto acústico.</textarea></label>
+      <div class="callout" id="emailConfigNotice" style="display:none;">El envío de correo no está configurado en el servidor (falta SMTP en .env). Puedes exportar el PDF y enviarlo manualmente mientras tanto.</div>
+      <button class="btn btn-primary" id="btnConfirmSendEmail">Adjuntar PDF y enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW PROJECT MODAL -->
+<!-- MATERIALS CATALOG -->
+<div class="modal-backdrop" id="catalogModal">
+  <div class="modal-card" style="max-width:760px;">
+    <div class="card-head">
+      <div class="card-title">📋 Catálogo de materiales de insonorización</div>
+      <button class="btn btn-danger btn-sm" id="btnCloseCatalog">✕</button>
+    </div>
+    <p class="kpi-label" style="margin-bottom:12px;">Precios de referencia de mercado (Medellín) — ajústalos siempre al cotizar cada proyecto. Haz clic en "+" para agregarlo a la BOM actual.</p>
+    <div id="catalogContainer" style="max-height:60vh; overflow-y:auto;"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="newProjectModal">
+  <div class="modal-card">
+    <div class="card-head">
+      <div class="card-title">Nuevo proyecto</div>
+      <button class="btn btn-danger btn-sm" id="btnCloseNewProject">✕</button>
+    </div>
+    <div class="field-group">
+      <label>Nombre del proyecto<input id="npName" placeholder="Ej. Cinema Dedicado Llanogrande" autocomplete="off"></label>
+      <label>Cliente<input id="npClient" placeholder="Ej. Familia Gómez" autocomplete="off"></label>
+      <button class="btn btn-primary" id="btnConfirmNewProject">Crear y abrir</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

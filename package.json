@@ -1,0 +1,24 @@
+{
+  "name": "master-hands-acoustic-os",
+  "version": "2.0.0",
+  "description": "Estacion de trabajo digital para proyectos de insonorizacion acustica: cotizador parametrico, render 3D y gestion de proyectos con base de datos local.",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test",
+    "reset-password": "node server/reset-password.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jimp": "^1.6.1",
+    "multer": "^2.3.0",
+    "nodemailer": "^9.0.6",
+    "winston": "^3.19.0",
+    "ws": "^8.21.3"
+  }
+}
